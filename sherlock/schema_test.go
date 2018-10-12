@@ -14,6 +14,7 @@ type schemaTestDoc struct {
 func (d *schemaTestDoc) ID() string {
 	return fmt.Sprintf("%x", md5.Sum([]byte(d.Title)))
 }
+
 func TestSchemaFromStruct(t *testing.T) {
 	doc := schemaTestDoc{}
 	schema, err := NewSchemaFromStruct(doc)

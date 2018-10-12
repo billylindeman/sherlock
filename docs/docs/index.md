@@ -31,7 +31,4 @@ func main() {
 
     s.Index()
 
-
 }
-
-```
