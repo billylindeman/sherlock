@@ -161,7 +161,7 @@ func (i *Index) Query(q string) ([]QueryResult, error) {
 						l = append(l[:0], l[1:]...) // remove item 0 from slice
 					}
 
-					fmt.Println(l)
+					// fmt.Println(l)
 					for _, h := range l {
 						m := phraseMatch{
 							p1: pp1,
@@ -214,7 +214,6 @@ func (i *Index) Query(q string) ([]QueryResult, error) {
 		if len(answers[docID]) > 0 {
 			totalScore := 500
 
-			// fmt.Printf("\n\ndoc phrase hit:  %#v\n\n", answers[docID])
 			for _, pm := range answers[docID] {
 				totalScore -= abs(pm.p2.position - pm.p1.position)
 			}
