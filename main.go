@@ -7,8 +7,10 @@ import (
 	"io/ioutil"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/billylindeman/sherlock/sherlock"
+	"github.com/sbwhitecap/tqdm"
 )
 
 type Document struct {
@@ -31,16 +33,27 @@ func main() {
 	}
 
 	fmt.Printf("\nLoaded %v docs\n", len(corpus))
-
-	for _, doc := range corpus {
+	tqdm.R(0, len(corpus), func(v interface{}) (brk bool) {
+		idx := v.(int)
+		doc := corpus[idx]
 		s.Index(doc)
-	}
+		return
+	})
 
 	reader := bufio.NewReader(os.Stdin)
-	fmt.Println("Welcome to sherlock!")
+	fmt.Println("\nWelcome to sherlock!")
 	for {
 		fmt.Print("search:> ")
 		text, _ := reader.ReadString('\n')
-		s.Query(text)
+
+		t1 := time.Now()
+		results, _ := s.Query(text)
+		t2 := time.Now()
+
+		if len(results) > 0 {
+			fmt.Printf("Found %v results in %v\n", len(results), t2.Sub(t1))
+			fmt.Println("Top result: ", results[0])
+		}
+
 	}
 }

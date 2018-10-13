@@ -1,7 +1,7 @@
 package sherlock
 
 import (
-	"fmt"
+	"sort"
 	"strings"
 
 	"github.com/alediaferia/prefixmap"
@@ -21,13 +21,14 @@ type posting struct {
 	positions []hit
 }
 
-// func (p *posting) score() int {
-// 	score := 0
+func (p *posting) score() int {
+	return len(p.positions)
+}
 
-// 	// for _, hit := range p.positions {
-
-// 	// }
-// }
+type QueryResult struct {
+	Object interface{}
+	Score  int
+}
 
 // hit represents a hit of a term in a document
 type hit struct {
@@ -39,6 +40,7 @@ type hit struct {
 func (i *Index) initWithSchema(schema Schema) {
 	i.schema = &schema
 	i.prefixMap = prefixmap.New()
+	i.documents = make(map[uint64]interface{})
 }
 
 // Index takes in a struct, processes it's struct tags, and indexes it's terms
@@ -73,18 +75,21 @@ func (i *Index) Index(v interface{}) error {
 		list.positions = append(list.positions, h)
 	}
 
-	fmt.Printf("index built posting list: %#v", postings)
+	// fmt.Printf("index built posting list: %#v", postings)
 	// Merge into inverted index
 	for term, postingList := range postings {
 		i.prefixMap.Insert(term, postingList)
 	}
 
+	i.documents[i.numDocs] = v
+
 	i.numDocs++
+
 	return nil
 }
 
 // Query takes a string and prefix searches it
-func (i *Index) Query(q string) ([]interface{}, error) {
+func (i *Index) Query(q string) ([]QueryResult, error) {
 	norm := strings.ToLower(q)
 	terms := strings.Split(norm, " ")
 
@@ -96,12 +101,35 @@ func (i *Index) Query(q string) ([]interface{}, error) {
 		for _, p := range postings {
 			p := p.(*posting)
 			merged = append(merged, *p)
-
-			fmt.Printf("hit: %#v\n", p)
 		}
 	}
 
+	grouped := make(map[uint64][]posting)
 	//	return results
+	for _, p := range merged {
+		if _, ok := grouped[p.docID]; !ok {
+			grouped[p.docID] = []posting{p}
+			continue
+		}
+		grouped[p.docID] = append(grouped[p.docID], p)
+	}
 
-	return nil, nil
+	results := []QueryResult{}
+	for docID, postingList := range grouped {
+		r := QueryResult{
+			Object: i.documents[docID],
+		}
+
+		for _, p := range postingList {
+			r.Score += p.score()
+		}
+
+		results = append(results, r)
+	}
+
+	sort.Slice(results, func(i, j int) bool {
+		return results[i].Score < results[j].Score
+	})
+
+	return results, nil
 }

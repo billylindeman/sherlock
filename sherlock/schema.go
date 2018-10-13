@@ -27,9 +27,9 @@ func (s *Schema) analyze(v interface{}) (analysis, error) {
 
 	doc := reflect.ValueOf(v)
 	for _, f := range s.Fields {
-		log.Println("analyzing field: ", f.fieldName)
+		// log.Println("analyzing field: ", f.fieldName)
 		text := doc.FieldByName(f.fieldName)
-		fmt.Println("found value: ", text.String())
+		// fmt.Println("found value: ", text.String())
 
 		pos := 0
 		for _, word := range strings.Split(text.String(), " ") {
