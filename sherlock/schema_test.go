@@ -9,6 +9,8 @@ import (
 type schemaTestDoc struct {
 	Title string `sherlock:"term,weight=10"`
 	Body  string `sherlock:"term"`
+
+	meta string `sherlock:"-"`
 }
 
 func (d *schemaTestDoc) ID() string {
@@ -16,12 +18,17 @@ func (d *schemaTestDoc) ID() string {
 }
 
 func TestSchemaFromStruct(t *testing.T) {
-	doc := schemaTestDoc{}
+	doc := schemaTestDoc{
+		Title: "test",
+		Body:  "this is a big test",
+	}
 	schema, err := NewSchemaFromStruct(doc)
 	if err != nil {
 		t.Fatal("Error creating schema from document: ", err)
 	}
 
 	fmt.Println("Schema: ", schema)
+
+	schema.analyze(doc)
 
 }

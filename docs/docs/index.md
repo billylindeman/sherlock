@@ -10,25 +10,28 @@ Sherlock is designed to be simple to use and embeddable in any go application.
 
 ```go
 type Document struct {
-	Title    string `sherlock:"term,boost=2"`
-	Body     string `sherlock:"term"`
+	Title    string `sherlock:"weight=10"`
+	Body     string `sherlock:"weight=5"`
+	Tags []string `sherlock:"weight=10,facet=term"` // We want facets for these results
 }
 
 func main() {
-    s := sherlock.NewIndex()
+	s := sherlock.Index{}
 
-    corpus := []Document{
-        Document {
-        Title: "Example",
-        Body: "This is an example",
-        },
-        Document {
-        Title: "Real world",
-        Body: "This is the real world",
-    },
-    }
+	corpus := []Document{
+		Document{
+			Title: "Example",
+			Body:  "This is an example",
+		},
+		Document{
+			Title: "Real world",
+			Body:  "This is the real world",
+		},
+	}
 
-
-    s.Index()
+	for _, doc := range corpus {
+		s.Index(doc)
+	}
 
 }
+```

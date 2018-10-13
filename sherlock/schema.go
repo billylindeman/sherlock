@@ -3,7 +3,9 @@ package sherlock
 import (
 	"errors"
 	"fmt"
+	"log"
 	"reflect"
+	"strings"
 )
 
 var (
@@ -15,19 +17,50 @@ const tagName = "sherlock"
 
 // Schema represents the indexing criteria for a given object
 type Schema struct {
-	Rules []SchemaRule
+	Fields []FieldRule
 }
 
-// SchemaRule contains rule information for each individual field being indexed on a given object
-type SchemaRule struct {
+func (s *Schema) analyze(v interface{}) (analysis, error) {
+	a := analysis{
+		tokens: []token{},
+	}
+
+	doc := reflect.ValueOf(v)
+	for _, f := range s.Fields {
+		log.Println("analyzing field: ", f.fieldName)
+		text := doc.FieldByName(f.fieldName)
+		fmt.Println("found value: ", text.String())
+
+		pos := 0
+		for _, word := range strings.Split(text.String(), " ") {
+			tok := token{
+				value:    strings.ToLower(word),
+				field:    f.fieldName,
+				position: pos,
+				weight:   f.weight,
+			}
+			a.tokens = append(a.tokens, tok)
+			pos += len(word)
+		}
+	}
+
+	return a, nil
+
+}
+
+// FieldRule contains rule information for each individual field being indexed on a given object
+type FieldRule struct {
 	Omit bool
 
+	weight    int
+	field     reflect.StructField
 	tag       string
 	fieldName string
 }
 
 // NewSchemaFromStruct builds a document schema by reflecting over the passed in struct
 func NewSchemaFromStruct(v interface{}) (*Schema, error) {
+	out := Schema{}
 	s := reflect.ValueOf(v)
 
 	for i := 0; i < s.NumField(); i++ {
@@ -35,7 +68,12 @@ func NewSchemaFromStruct(v interface{}) (*Schema, error) {
 		f := s.Type().Field(i)
 		tag := f.Tag.Get(tagName)
 
-		r := SchemaRule{
+		for _, t := range strings.Split(tag, ",") {
+			log.Println("Found option: ", t)
+
+		}
+
+		r := FieldRule{
 			fieldName: f.Name,
 			tag:       tag,
 		}
@@ -46,6 +84,9 @@ func NewSchemaFromStruct(v interface{}) (*Schema, error) {
 		}
 
 		fmt.Printf("Found Tag: %v \n build schema: %+v ", tag, r)
+
+		out.Fields = append(out.Fields, r)
 	}
-	return nil, nil
+
+	return &out, nil
 }
