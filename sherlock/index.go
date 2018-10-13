@@ -1,6 +1,7 @@
 package sherlock
 
 import (
+	"fmt"
 	"sort"
 	"strings"
 
@@ -93,15 +94,79 @@ func (i *Index) Query(q string) ([]QueryResult, error) {
 	norm := strings.ToLower(q)
 	terms := strings.Split(norm, " ")
 
-	merged := []posting{}
+	dedupe := map[string]bool{}
+	fmt.Printf("Got query terms: %v", terms)
 	for _, term := range terms {
+		t := strings.TrimSpace(term)
+		dedupe[t] = true
+	}
+
+	merged := []posting{}
+	j := 0
+	for term := range dedupe {
 		// grab postings for q
-		postings := i.prefixMap.GetByPrefix(term)
+		var postings []interface{}
+		if j == len(terms)-1 {
+			// if we're on the last term lets do a prefix search
+			postings = i.prefixMap.GetByPrefix(term)
+		} else {
+			postings = i.prefixMap.Get(term)
+		}
+
 		// sort postings based on scoring
 		for _, p := range postings {
 			p := p.(*posting)
 			merged = append(merged, *p)
 		}
+
+		j++
+	}
+
+	// phrase proximity calculation
+	// based on algorithm 2.12 from into to ir (manning)
+	const withinKWords = 2
+
+	type phraseMatch struct {
+		p1 hit
+		p2 hit
+	}
+	answers := make(map[uint64][]phraseMatch)
+
+	if len(terms) > 1 {
+		for i := 0; i < len(merged)-1; i++ {
+			for j := 1; j < len(merged); j++ {
+				p1 := merged[i]
+				p2 := merged[j]
+
+				// terms in the same document
+				if p1.docID == p2.docID {
+					l := []hit{}
+					for _, pp1 := range p1.positions {
+						for _, pp2 := range p2.positions {
+							if abs(pp1.position-pp2.position) <= withinKWords {
+								l = append(l, pp2)
+							} else if pp2.position > pp1.position {
+								break
+							}
+						}
+
+						for len(l) > 0 && abs(l[0].position-pp1.position) > withinKWords {
+							l = append(l[:0], l[1:]...) // remove item 0 from slice
+						}
+
+						for _, h := range l {
+							m := phraseMatch{
+								p1: pp1,
+								p2: h,
+							}
+							answers[p1.docID] = append(answers[p1.docID], m)
+						}
+					}
+				}
+			}
+		}
+
+		// fmt.Printf("Found phrase distances: %#v\n", answers)
 	}
 
 	grouped := make(map[uint64][]posting)
@@ -121,7 +186,16 @@ func (i *Index) Query(q string) ([]QueryResult, error) {
 		}
 
 		for _, p := range postingList {
-			r.Score += p.score()
+			r.Score += (2 * p.score())
+		}
+
+		if len(answers[docID]) > 0 {
+			totalScore := 100
+			// fmt.Printf("doc phrase hit, score:  %#v", answers)
+			for _, pm := range answers[docID] {
+				totalScore += abs(pm.p2.position - pm.p1.position)
+			}
+			r.Score = totalScore
 		}
 
 		results = append(results, r)
@@ -131,5 +205,11 @@ func (i *Index) Query(q string) ([]QueryResult, error) {
 		return results[i].Score < results[j].Score
 	})
 
+	// return []QueryResult{}, nil
 	return results, nil
+}
+
+func abs(n int) int {
+	y := n >> 63
+	return (n ^ y) - y
 }

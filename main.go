@@ -14,8 +14,8 @@ import (
 )
 
 type Document struct {
-	Title string `json:"play_name" sherlock:"weight=10"`
-	Body  string `json:"text_entry" sherlock:"weight=5"`
+	// Title string `json:"play_name" sherlock:"weight=10"`
+	Body string `json:"text_entry" sherlock:"weight=5"`
 
 	Line string `json:"line_number"`
 }
@@ -50,10 +50,12 @@ func main() {
 		results, _ := s.Query(text)
 		t2 := time.Now()
 
-		if len(results) > 0 {
-			fmt.Printf("Found %v results in %v\n", len(results), t2.Sub(t1))
-			fmt.Println("Top result: ", results[0])
-		}
+		fmt.Printf("Found %v results in %v\n", len(results), t2.Sub(t1))
 
+		for i := 0; i < 10; i++ {
+			if i < len(results) {
+				fmt.Printf("\t[%v](%v) %#v\n", i, results[i].Score, results[i].Object)
+			}
+		}
 	}
 }

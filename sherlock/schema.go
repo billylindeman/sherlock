@@ -32,11 +32,11 @@ func (s *Schema) analyze(v interface{}) (analysis, error) {
 		// fmt.Println("found value: ", text.String())
 
 		pos := 0
-		for _, word := range strings.Split(text.String(), " ") {
+		for i, word := range strings.Split(text.String(), " ") {
 			tok := token{
 				value:    strings.ToLower(word),
 				field:    f.fieldName,
-				position: pos,
+				position: i,
 				weight:   f.weight,
 			}
 			a.tokens = append(a.tokens, tok)
