@@ -91,15 +91,17 @@ func (i *Index) Index(v interface{}) error {
 
 // Query takes a string and prefix searches it
 func (i *Index) Query(q string) ([]QueryResult, error) {
-	norm := strings.ToLower(q)
+	norm := normalize(q)
 	terms := strings.Split(norm, " ")
 
 	dedupe := map[string]bool{}
-	fmt.Printf("Got query terms: %v", terms)
+
 	for _, term := range terms {
 		t := strings.TrimSpace(term)
 		dedupe[t] = true
 	}
+
+	fmt.Printf("Got query terms: %v", dedupe)
 
 	merged := []posting{}
 	j := 0
@@ -108,7 +110,7 @@ func (i *Index) Query(q string) ([]QueryResult, error) {
 		var postings []interface{}
 		if j == len(terms)-1 {
 			// if we're on the last term lets do a prefix search
-			postings = i.prefixMap.GetByPrefix(term)
+			postings = i.prefixMap.Get(term)
 		} else {
 			postings = i.prefixMap.Get(term)
 		}
@@ -122,9 +124,13 @@ func (i *Index) Query(q string) ([]QueryResult, error) {
 		j++
 	}
 
+	sort.Slice(merged, func(i, j int) bool {
+		return merged[i].docID < merged[j].docID
+	})
+
 	// phrase proximity calculation
 	// based on algorithm 2.12 from into to ir (manning)
-	const withinKWords = 2
+	const withinKWords = 3
 
 	type phraseMatch struct {
 		p1 hit
@@ -132,36 +138,52 @@ func (i *Index) Query(q string) ([]QueryResult, error) {
 	}
 	answers := make(map[uint64][]phraseMatch)
 
-	if len(terms) > 1 {
-		for i := 0; i < len(merged)-1; i++ {
-			for j := 1; j < len(merged); j++ {
-				p1 := merged[i]
-				p2 := merged[j]
+	var p1, p2 *posting
+	if len(merged) > 1 {
+		p1 = &merged[0]
+		p2 = &merged[1]
+		idx := 1
 
-				// terms in the same document
-				if p1.docID == p2.docID {
-					l := []hit{}
-					for _, pp1 := range p1.positions {
-						for _, pp2 := range p2.positions {
-							if abs(pp1.position-pp2.position) <= withinKWords {
-								l = append(l, pp2)
-							} else if pp2.position > pp1.position {
-								break
-							}
-						}
-
-						for len(l) > 0 && abs(l[0].position-pp1.position) > withinKWords {
-							l = append(l[:0], l[1:]...) // remove item 0 from slice
-						}
-
-						for _, h := range l {
-							m := phraseMatch{
-								p1: pp1,
-								p2: h,
-							}
-							answers[p1.docID] = append(answers[p1.docID], m)
+		for p1 != nil && p2 != nil {
+			// terms in the same document
+			if p1.docID == p2.docID {
+				l := []hit{}
+				for _, pp1 := range p1.positions {
+					for _, pp2 := range p2.positions {
+						if abs(pp1.position-pp2.position) <= withinKWords {
+							l = append(l, pp2)
+						} else if pp2.position > pp1.position {
+							break
 						}
 					}
+
+					for len(l) > 0 && abs(l[0].position-pp1.position) > withinKWords {
+						l = append(l[:0], l[1:]...) // remove item 0 from slice
+					}
+
+					fmt.Println(l)
+					for _, h := range l {
+						m := phraseMatch{
+							p1: pp1,
+							p2: h,
+						}
+						answers[p1.docID] = append(answers[p1.docID], m)
+					}
+				}
+			}
+
+			if p1.docID < p2.docID {
+				idx++
+				p1 = nil
+				if idx < len(merged) {
+					p1 = &merged[idx]
+					continue
+				}
+			} else {
+				idx++
+				p2 = nil
+				if idx < len(merged) {
+					p2 = &merged[idx]
 				}
 			}
 		}
@@ -186,14 +208,15 @@ func (i *Index) Query(q string) ([]QueryResult, error) {
 		}
 
 		for _, p := range postingList {
-			r.Score += (2 * p.score())
+			r.Score += 1000 - (2 * p.score())
 		}
 
 		if len(answers[docID]) > 0 {
-			totalScore := 100
-			// fmt.Printf("doc phrase hit, score:  %#v", answers)
+			totalScore := 500
+
+			// fmt.Printf("\n\ndoc phrase hit:  %#v\n\n", answers[docID])
 			for _, pm := range answers[docID] {
-				totalScore += abs(pm.p2.position - pm.p1.position)
+				totalScore -= abs(pm.p2.position - pm.p1.position)
 			}
 			r.Score = totalScore
 		}
