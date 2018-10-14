@@ -1,3 +1,9 @@
+//
+// schema.go
+// billy lindeman <billy@lnd.mn>
+//
+// reflection on struct tags for extracting configuration
+//
 package sherlock
 
 import (

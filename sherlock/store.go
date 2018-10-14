@@ -1,3 +1,10 @@
+//
+// store.go
+// billy lindeman <billy@lnd.mn>
+//
+// storage for the full documents that have been indexed
+// currently just memory interfaces, but ideally some sort of disk-backed k/v such as badger
+//
 package sherlock
 
 import "errors"
@@ -6,8 +13,8 @@ var (
 	ErrDocumentNotFound = errors.New("document not found in store")
 )
 
-// DocStore key/value store to put the documents that have been indexed
-type DocStore interface {
+// Store key/value store to put the documents that have been indexed
+type Store interface {
 	Insert(uint64, interface{}) error
 	Get(uint64) (interface{}, error)
 }
