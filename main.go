@@ -10,13 +10,11 @@ import (
 	"time"
 
 	"github.com/billylindeman/sherlock/sherlock"
-	"github.com/sbwhitecap/tqdm"
 )
 
 type Document struct {
 	// Title string `json:"play_name" sherlock:"weight=10"`
 	Body string `json:"text_entry" sherlock:"weight=5"`
-
 	Line string `json:"line_number"`
 }
 
@@ -24,7 +22,6 @@ func main() {
 	s := sherlock.Index{}
 
 	corpus := []Document{}
-
 	b, _ := ioutil.ReadFile("./shakespeare.json")
 	for _, j := range strings.Split(string(b), "\n") {
 		d := Document{}
@@ -33,12 +30,18 @@ func main() {
 	}
 
 	fmt.Printf("\nLoaded %v docs\n", len(corpus))
-	tqdm.R(0, len(corpus), func(v interface{}) (brk bool) {
-		idx := v.(int)
-		doc := corpus[idx]
+	fmt.Print("Indexing.")
+	t1 := time.Now()
+	for i, doc := range corpus {
 		s.Index(doc)
-		return
-	})
+
+		if i%5000 == 0 {
+			fmt.Print(".")
+		}
+	}
+	t2 := time.Now()
+	fmt.Println("Done")
+	fmt.Printf("Indexed %v docs in %v\n", len(corpus), t2.Sub(t1))
 
 	reader := bufio.NewReader(os.Stdin)
 	fmt.Println("\nWelcome to sherlock!")
@@ -54,7 +57,7 @@ func main() {
 
 		for i := 0; i < 10; i++ {
 			if i < len(results) {
-				fmt.Printf("\t[%v](%v) %#v\n", i, results[i].Score, results[i].Object)
+				fmt.Printf("\t[%v](score:%v) %#v\n", i, results[i].Score, results[i].Object)
 			}
 		}
 	}

@@ -20,6 +20,7 @@ type Index struct {
 type posting struct {
 	docID     uint64
 	positions []hit
+	term      string
 }
 
 func (p *posting) score() int {
@@ -92,16 +93,18 @@ func (i *Index) Index(v interface{}) error {
 // Query takes a string and prefix searches it
 func (i *Index) Query(q string) ([]QueryResult, error) {
 	norm := normalize(q)
-	terms := strings.Split(norm, " ")
+	terms := []string{}
+	for _, t := range strings.Split(norm, " ") {
+		terms = append(terms, strings.TrimSpace(t))
+	}
+
+	fmt.Printf("Got query terms: %v\n", terms)
 
 	dedupe := map[string]bool{}
 
 	for _, term := range terms {
-		t := strings.TrimSpace(term)
-		dedupe[t] = true
+		dedupe[term] = true
 	}
-
-	fmt.Printf("Got query terms: %v", dedupe)
 
 	merged := []posting{}
 	j := 0
@@ -110,7 +113,7 @@ func (i *Index) Query(q string) ([]QueryResult, error) {
 		var postings []interface{}
 		if j == len(terms)-1 {
 			// if we're on the last term lets do a prefix search
-			postings = i.prefixMap.Get(term)
+			postings = i.prefixMap.GetByPrefix(term)
 		} else {
 			postings = i.prefixMap.Get(term)
 		}
@@ -118,7 +121,9 @@ func (i *Index) Query(q string) ([]QueryResult, error) {
 		// sort postings based on scoring
 		for _, p := range postings {
 			p := p.(*posting)
-			merged = append(merged, *p)
+			c := *p
+			c.term = term
+			merged = append(merged, c)
 		}
 
 		j++
@@ -131,10 +136,11 @@ func (i *Index) Query(q string) ([]QueryResult, error) {
 	// phrase proximity calculation
 	// based on algorithm 2.12 from into to ir (manning)
 	const withinKWords = 3
-
 	type phraseMatch struct {
-		p1 hit
-		p2 hit
+		p1term string
+		p2term string
+		p1     hit
+		p2     hit
 	}
 	answers := make(map[uint64][]phraseMatch)
 
@@ -163,11 +169,25 @@ func (i *Index) Query(q string) ([]QueryResult, error) {
 
 					// fmt.Println(l)
 					for _, h := range l {
-						m := phraseMatch{
-							p1: pp1,
-							p2: h,
+						// make sure match object is in order (makes phrase evalution easier)
+						if pp1.position < h.position {
+							m := phraseMatch{
+								p1term: p1.term,
+								p2term: p2.term,
+								p1:     pp1,
+								p2:     h,
+							}
+							answers[p1.docID] = append(answers[p1.docID], m)
+						} else {
+							m := phraseMatch{
+								p1term: p2.term,
+								p2term: p1.term,
+								p1:     h,
+								p2:     pp1,
+							}
+							answers[p1.docID] = append(answers[p1.docID], m)
+
 						}
-						answers[p1.docID] = append(answers[p1.docID], m)
 					}
 				}
 			}
@@ -212,11 +232,40 @@ func (i *Index) Query(q string) ([]QueryResult, error) {
 		}
 
 		if len(answers[docID]) > 0 {
+
+			matches := answers[docID]
 			totalScore := 500
 
-			for _, pm := range answers[docID] {
-				totalScore -= abs(pm.p2.position - pm.p1.position)
+			termIdx := 0
+			matchIdx := 0
+
+			curScore := 0
+			for termIdx < len(terms) && matchIdx < len(matches) {
+
+				if matches[matchIdx].p1term == terms[termIdx] {
+					termIdx++
+					if termIdx == len(terms) {
+						break
+					}
+
+					if matches[matchIdx].p2term == terms[termIdx] {
+						// phrase bigram hit
+						fmt.Printf("bigram hit: %v->%v \n", matches[matchIdx].p1term, matches[matchIdx].p2term)
+						distance := abs(matches[matchIdx].p2.position - matches[matchIdx].p1.position)
+						curScore += 100 / distance
+
+						matchIdx++
+						continue
+					}
+				} else {
+					termIdx++
+					continue
+				}
+
 			}
+
+			// fmt.Printf("matches: %#v\n", matches)
+			totalScore -= curScore
 			r.Score = totalScore
 		}
 

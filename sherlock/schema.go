@@ -2,8 +2,6 @@ package sherlock
 
 import (
 	"errors"
-	"fmt"
-	"log"
 	"reflect"
 	"strings"
 )
@@ -68,10 +66,9 @@ func NewSchemaFromStruct(v interface{}) (*Schema, error) {
 		f := s.Type().Field(i)
 		tag := f.Tag.Get(tagName)
 
-		for _, t := range strings.Split(tag, ",") {
-			log.Println("Found option: ", t)
-
-		}
+		// for _, t := range strings.Split(tag, ",") {
+		// 	// log.Println("Found option: ", t)
+		// }
 
 		r := FieldRule{
 			fieldName: f.Name,
@@ -83,7 +80,7 @@ func NewSchemaFromStruct(v interface{}) (*Schema, error) {
 			r.Omit = true
 		}
 
-		fmt.Printf("Found Tag: %v \n build schema: %+v ", tag, r)
+		// fmt.Printf("Found Tag: %v \n build schema: %+v ", tag, r)
 
 		out.Fields = append(out.Fields, r)
 	}
