@@ -27,9 +27,13 @@ func (p *posting) score() int {
 	return len(p.positions)
 }
 
+// QueryResult gather results
 type QueryResult struct {
 	Object interface{}
 	Score  int
+
+	docID        uint64
+	postingsList []posting
 }
 
 // hit represents a hit of a term in a document
@@ -113,7 +117,7 @@ func (i *Index) Query(q string) ([]QueryResult, error) {
 		var postings []interface{}
 		if j == len(terms)-1 {
 			// if we're on the last term lets do a prefix search
-			postings = i.prefixMap.GetByPrefix(term)
+			postings = i.prefixMap.Get(term)
 		} else {
 			postings = i.prefixMap.Get(term)
 		}
@@ -135,7 +139,7 @@ func (i *Index) Query(q string) ([]QueryResult, error) {
 
 	// phrase proximity calculation
 	// based on algorithm 2.12 from into to ir (manning)
-	const withinKWords = 3
+	const withinKWords = 1
 	type phraseMatch struct {
 		p1term string
 		p2term string
@@ -190,9 +194,16 @@ func (i *Index) Query(q string) ([]QueryResult, error) {
 						}
 					}
 				}
-			}
 
-			if p1.docID < p2.docID {
+				idx++
+				if idx < len(merged) {
+					p1 = p2
+					p2 = &merged[idx]
+					continue
+				} else {
+					break
+				}
+			} else if p1.docID < p2.docID {
 				idx++
 				p1 = nil
 				if idx < len(merged) {
@@ -212,6 +223,7 @@ func (i *Index) Query(q string) ([]QueryResult, error) {
 	}
 
 	grouped := make(map[uint64][]posting)
+
 	//	return results
 	for _, p := range merged {
 		if _, ok := grouped[p.docID]; !ok {
@@ -234,34 +246,44 @@ func (i *Index) Query(q string) ([]QueryResult, error) {
 		if len(answers[docID]) > 0 {
 
 			matches := answers[docID]
+
+			fmt.Printf("matches: %#v\n", matches)
 			totalScore := 500
 
 			termIdx := 0
 			matchIdx := 0
 
 			curScore := 0
-			for termIdx < len(terms) && matchIdx < len(matches) {
 
-				if matches[matchIdx].p1term == terms[termIdx] {
+			pendingHit := false
+			for termIdx < len(terms) && matchIdx < len(matches) {
+				fmt.Printf("loop term: %v match %v \n", termIdx, matchIdx)
+				distance := abs(matches[matchIdx].p2.position - matches[matchIdx].p1.position)
+
+				if matches[matchIdx].p1term == terms[termIdx] && distance == 1 {
+					pendingHit = true
+
 					termIdx++
+					fmt.Printf("loop term: %v match %v \n", termIdx, matchIdx)
 					if termIdx == len(terms) {
 						break
 					}
-
-					if matches[matchIdx].p2term == terms[termIdx] {
-						// phrase bigram hit
-						fmt.Printf("bigram hit: %v->%v \n", matches[matchIdx].p1term, matches[matchIdx].p2term)
-						distance := abs(matches[matchIdx].p2.position - matches[matchIdx].p1.position)
-						curScore += 100 / distance
-
-						matchIdx++
-						continue
-					}
 				} else {
-					termIdx++
+					matchIdx++
 					continue
 				}
 
+				if matches[matchIdx].p2term == terms[termIdx] && pendingHit {
+					// phrase bigram hit
+					fmt.Printf("bigram hit: %v->%v \n", matches[matchIdx].p1term, matches[matchIdx].p2term)
+					curScore += 100 / distance
+
+					matchIdx++
+				} else {
+					termIdx++
+				}
+
+				pendingHit = false
 			}
 
 			// fmt.Printf("matches: %#v\n", matches)

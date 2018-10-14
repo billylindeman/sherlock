@@ -2,11 +2,8 @@ package main
 
 import (
 	"bufio"
-	"encoding/json"
 	"fmt"
-	"io/ioutil"
 	"os"
-	"strings"
 	"time"
 
 	"github.com/billylindeman/sherlock/sherlock"
@@ -18,16 +15,31 @@ type Document struct {
 	Line string `json:"line_number"`
 }
 
+var corpus = []Document{
+	Document{
+		Body: "hello there son",
+	},
+	Document{
+		Body: "different entirely",
+	},
+	Document{
+		Body: "super different entirely",
+	},
+	Document{
+		Body: "it aint be like it is, but it do",
+	},
+}
+
 func main() {
 	s := sherlock.Index{}
 
-	corpus := []Document{}
-	b, _ := ioutil.ReadFile("./shakespeare.json")
-	for _, j := range strings.Split(string(b), "\n") {
-		d := Document{}
-		json.Unmarshal([]byte(j), &d)
-		corpus = append(corpus, d)
-	}
+	// corpus := []Document{}
+	// b, _ := ioutil.ReadFile("./shakespeare.json")
+	// for _, j := range strings.Split(string(b), "\n") {
+	// 	d := Document{}
+	// 	json.Unmarshal([]byte(j), &d)
+	// 	corpus = append(corpus, d)
+	// }
 
 	fmt.Printf("\nLoaded %v docs\n", len(corpus))
 	fmt.Print("Indexing.")
