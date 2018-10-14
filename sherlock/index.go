@@ -223,7 +223,6 @@ func (i *Index) Query(q string) ([]QueryResult, error) {
 	}
 
 	grouped := make(map[uint64][]posting)
-
 	//	return results
 	for _, p := range merged {
 		if _, ok := grouped[p.docID]; !ok {
@@ -242,13 +241,13 @@ func (i *Index) Query(q string) ([]QueryResult, error) {
 		for _, p := range postingList {
 			r.Score += 1000 - (2 * p.score())
 		}
+		r.Score -= len(postingList) * 50
 
 		if len(answers[docID]) > 0 {
 
 			matches := answers[docID]
 
 			fmt.Printf("matches: %#v\n", matches)
-			totalScore := 500
 
 			termIdx := 0
 			matchIdx := 0
@@ -257,14 +256,14 @@ func (i *Index) Query(q string) ([]QueryResult, error) {
 
 			pendingHit := false
 			for termIdx < len(terms) && matchIdx < len(matches) {
-				fmt.Printf("loop term: %v match %v \n", termIdx, matchIdx)
+				// fmt.Printf("loop term: %v match %v \n", termIdx, matchIdx)
 				distance := abs(matches[matchIdx].p2.position - matches[matchIdx].p1.position)
 
 				if matches[matchIdx].p1term == terms[termIdx] && distance == 1 {
 					pendingHit = true
 
 					termIdx++
-					fmt.Printf("loop term: %v match %v \n", termIdx, matchIdx)
+					// fmt.Printf("loop term: %v match %v \n", termIdx, matchIdx)
 					if termIdx == len(terms) {
 						break
 					}
@@ -275,7 +274,7 @@ func (i *Index) Query(q string) ([]QueryResult, error) {
 
 				if matches[matchIdx].p2term == terms[termIdx] && pendingHit {
 					// phrase bigram hit
-					fmt.Printf("bigram hit: %v->%v \n", matches[matchIdx].p1term, matches[matchIdx].p2term)
+					// fmt.Printf("bigram hit: %v->%v \n", matches[matchIdx].p1term, matches[matchIdx].p2term)
 					curScore += 100 / distance
 
 					matchIdx++
@@ -287,8 +286,8 @@ func (i *Index) Query(q string) ([]QueryResult, error) {
 			}
 
 			// fmt.Printf("matches: %#v\n", matches)
-			totalScore -= curScore
-			r.Score = totalScore
+			r.Score -= curScore
+			// r.Score = totalScore
 		}
 
 		results = append(results, r)
