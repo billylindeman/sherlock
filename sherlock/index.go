@@ -84,6 +84,7 @@ func (i *Index) Index(v interface{}) error {
 	// fmt.Printf("index built posting list: %#v", postings)
 	// Merge into inverted index
 	for term, postingList := range postings {
+		fmt.Printf("indexing %v posting list: %#v\n", term, postingList)
 		i.prefixMap.Insert(term, postingList)
 	}
 
@@ -110,34 +111,29 @@ func (i *Index) Query(q string) ([]QueryResult, error) {
 		dedupe[term] = true
 	}
 
-	merged := []posting{}
+	byTerm := make(map[string][]posting)
 	j := 0
 	for term := range dedupe {
 		// grab postings for q
 		var postings []interface{}
-		if j == len(terms)-1 {
-			// if we're on the last term lets do a prefix search
-			postings = i.prefixMap.Get(term)
-		} else {
-			postings = i.prefixMap.Get(term)
-		}
+		postings = i.prefixMap.Get(term)
 
-		// sort postings based on scoring
 		for _, p := range postings {
 			p := p.(*posting)
-			c := *p
-			c.term = term
-			merged = append(merged, c)
+			byTerm[term] = append(byTerm[term], *p)
 		}
 
 		j++
 	}
 
-	sort.Slice(merged, func(i, j int) bool {
-		return merged[i].docID < merged[j].docID
-	})
+	// merge posting lists
+	intermediate := []postings{}
+	for term, list := range byTerm {
+
+	}
 
 	// phrase proximity calculation
+	// (during positional intersection of posting lists)
 	// based on algorithm 2.12 from into to ir (manning)
 	const withinKWords = 1
 	type phraseMatch struct {
@@ -157,8 +153,11 @@ func (i *Index) Query(q string) ([]QueryResult, error) {
 		for p1 != nil && p2 != nil {
 			// terms in the same document
 			if p1.docID == p2.docID {
+				fmt.Printf("p1: %#v -- p2: %#v\n", p1.term, p2.term)
+
 				l := []hit{}
 				for _, pp1 := range p1.positions {
+					fmt.Printf("pp1: %#v\n", pp1)
 					for _, pp2 := range p2.positions {
 						if abs(pp1.position-pp2.position) <= withinKWords {
 							l = append(l, pp2)
@@ -168,6 +167,7 @@ func (i *Index) Query(q string) ([]QueryResult, error) {
 					}
 
 					for len(l) > 0 && abs(l[0].position-pp1.position) > withinKWords {
+						fmt.Println("purgging step?")
 						l = append(l[:0], l[1:]...) // remove item 0 from slice
 					}
 
@@ -238,14 +238,14 @@ func (i *Index) Query(q string) ([]QueryResult, error) {
 			Object: i.documents[docID],
 		}
 
-		for _, p := range postingList {
-			r.Score += 1000 - (2 * p.score())
-		}
-		r.Score -= len(postingList) * 50
+		r.Score += len(postingList) ^ 2
 
 		if len(answers[docID]) > 0 {
-
 			matches := answers[docID]
+
+			sort.Slice(matches, func(i, j int) bool {
+				return matches[i].p1.position < matches[j].p1.position
+			})
 
 			fmt.Printf("matches: %#v\n", matches)
 
@@ -253,17 +253,17 @@ func (i *Index) Query(q string) ([]QueryResult, error) {
 			matchIdx := 0
 
 			curScore := 0
-
 			pendingHit := false
+
 			for termIdx < len(terms) && matchIdx < len(matches) {
-				// fmt.Printf("loop term: %v match %v \n", termIdx, matchIdx)
+				fmt.Printf("loop term: %v match %v \n", termIdx, matchIdx)
 				distance := abs(matches[matchIdx].p2.position - matches[matchIdx].p1.position)
 
 				if matches[matchIdx].p1term == terms[termIdx] && distance == 1 {
 					pendingHit = true
 
 					termIdx++
-					// fmt.Printf("loop term: %v match %v \n", termIdx, matchIdx)
+					fmt.Printf("loop term: %v match %v \n", termIdx, matchIdx)
 					if termIdx == len(terms) {
 						break
 					}
@@ -274,8 +274,8 @@ func (i *Index) Query(q string) ([]QueryResult, error) {
 
 				if matches[matchIdx].p2term == terms[termIdx] && pendingHit {
 					// phrase bigram hit
-					// fmt.Printf("bigram hit: %v->%v \n", matches[matchIdx].p1term, matches[matchIdx].p2term)
-					curScore += 100 / distance
+					fmt.Printf("bigram hit: %v->%v \n", matches[matchIdx].p1term, matches[matchIdx].p2term)
+					curScore += 50 / distance
 
 					matchIdx++
 				} else {
@@ -285,8 +285,8 @@ func (i *Index) Query(q string) ([]QueryResult, error) {
 				pendingHit = false
 			}
 
-			// fmt.Printf("matches: %#v\n", matches)
-			r.Score -= curScore
+			r.Score += (curScore)
+			fmt.Printf("phraseScore: %v, rScore: %v\n", curScore, r.Score)
 			// r.Score = totalScore
 		}
 
@@ -294,7 +294,7 @@ func (i *Index) Query(q string) ([]QueryResult, error) {
 	}
 
 	sort.Slice(results, func(i, j int) bool {
-		return results[i].Score < results[j].Score
+		return results[i].Score > results[j].Score
 	})
 
 	// return []QueryResult{}, nil
