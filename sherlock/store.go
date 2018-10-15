@@ -3,29 +3,31 @@
 // billy lindeman <billy@lnd.mn>
 //
 // storage for the full documents that have been indexed
-// currently just memory interfaces, but ideally some sort of disk-backed k/v such as badger
+// currently just memory interfaces
+// in the futre we'll use some sort of disk-backed k/v such as badger
 //
+
 package sherlock
 
 import "errors"
 
 var (
-	ErrDocumentNotFound = errors.New("document not found in store")
+	errDocumentNotFound = errors.New("document not found in store")
 )
 
-// Store key/value store to put the documents that have been indexed
-type Store interface {
-	Insert(uint64, interface{}) error
-	Get(uint64) (interface{}, error)
+// store key/value store to put the documents that have been indexed
+type store interface {
+	insert(uint64, interface{}) error
+	get(uint64) (interface{}, error)
 }
 
-// MemoryStore is an inmemory DocStore backed by a basic map
-type MemoryStore struct {
+// memoryStore is an inmemory DocStore backed by a basic map
+type memoryStore struct {
 	documents map[uint64]interface{}
 }
 
 // Insert puts a doc into the map
-func (s *MemoryStore) Insert(docID uint64, v interface{}) error {
+func (s *memoryStore) insert(docID uint64, v interface{}) error {
 	if s.documents == nil {
 		s.documents = make(map[uint64]interface{})
 	}
@@ -35,12 +37,12 @@ func (s *MemoryStore) Insert(docID uint64, v interface{}) error {
 }
 
 // Get retrieves a doc from the map
-func (s *MemoryStore) Get(docID uint64) (interface{}, error) {
+func (s *memoryStore) get(docID uint64) (interface{}, error) {
 	if s.documents == nil {
-		return nil, ErrDocumentNotFound
+		return nil, errDocumentNotFound
 	}
 	if doc, ok := s.documents[docID]; ok {
 		return doc, nil
 	}
-	return nil, ErrDocumentNotFound
+	return nil, errDocumentNotFound
 }

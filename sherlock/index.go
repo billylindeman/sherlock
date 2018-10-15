@@ -10,17 +10,16 @@ import (
 	"fmt"
 	"sort"
 	"strings"
-
-	"github.com/alediaferia/prefixmap"
 )
 
 // Index search backed by a prefix map
 type Index struct {
-	numDocs   uint64
-	prefixMap *prefixmap.PrefixMap
-	schema    *Schema
+	numDocs uint64
 
-	documents map[uint64]interface{}
+	schema *Schema
+
+	inverted inverted
+	store    store
 }
 
 // QueryResult gather results
@@ -32,12 +31,11 @@ type QueryResult struct {
 	postingsList []posting
 }
 
-
 //
 func (i *Index) initWithSchema(schema Schema) {
 	i.schema = &schema
-	i.prefixMap = prefixmap.New()
-	i.documents = make(map[uint64]interface{})
+	i.inverted = newRadixInvertedIndex()
+	i.store = &memoryStore{}
 }
 
 // Index takes in a struct, processes it's struct tags, and indexes it's terms
@@ -55,34 +53,33 @@ func (i *Index) Index(v interface{}) error {
 		return err
 	}
 
-	postings := make(map[string]*posting)
-
+	postingMap := make(map[string]*posting)
 	// Process tokens into posting list
 	for _, tok := range analysis.tokens {
-		if _, ok := postings[tok.value]; !ok {
-			postings[tok.value] = &posting{
+		if _, ok := postingMap[tok.value]; !ok {
+			postingMap[tok.value] = &posting{
 				docID: i.numDocs,
+				hits:  []hit{},
 			}
 		}
-		list := postings[tok.value]
+
+		list := postingMap[tok.value]
 		h := hit{
 			position: tok.position,
-			weight:   tok.weight,
+			fieldID:  tok.fieldID,
 		}
-		list.positions = append(list.positions, h)
+		list.hits = append(list.hits, h)
 	}
 
-	// fmt.Printf("index built posting list: %#v", postings)
+	// fmt.Printf("index built posting list: %#v", postingMap)
 	// Merge into inverted index
-	for term, postingList := range postings {
-		fmt.Printf("indexing %v posting list: %#v\n", term, postingList)
-		i.prefixMap.Insert(term, postingList)
+	for term, post := range postingMap {
+		// fmt.Printf("indexing %v posting list: %#v\n", term, post)
+		i.inverted.insert(term, *post)
 	}
 
-	i.documents[i.numDocs] = v
-
+	i.store.insert(i.numDocs, v)
 	i.numDocs++
-
 	return nil
 }
 
@@ -96,123 +93,27 @@ func (i *Index) Query(q string) ([]QueryResult, error) {
 
 	fmt.Printf("Got query terms: %v\n", terms)
 
-	dedupe := map[string]bool{}
-
+	// Grab posting lists from the inverted index
+	lists := []*postingList{}
 	for _, term := range terms {
-		dedupe[term] = true
+		val, _ := i.inverted.get(term)
+		lists = append(lists, val)
 	}
 
-	byTerm := make(map[string][]posting)
-	j := 0
-	for term := range dedupe {
-		// grab postings for q
-		var postings []interface{}
-		postings = i.prefixMap.Get(term)
-
-		for _, p := range postings {
-			p := p.(*posting)
-			byTerm[term] = append(byTerm[term], *p)
-		}
-
-		j++
-	}
-
-	// merge posting lists
-	intermediate := []postings{}
-	for term, list := range byTerm {
-
-	}
-
-	// phrase proximity calculation
-	// (during positional intersection of posting lists)
-	// based on algorithm 2.12 from into to ir (manning)
-	const withinKWords = 1
-	type phraseMatch struct {
-		p1term string
-		p2term string
-		p1     hit
-		p2     hit
-	}
-	answers := make(map[uint64][]phraseMatch)
-
-		// fmt.Printf("Found phrase distances: %#v\n", answers)
-	}
-
-	grouped := make(map[uint64][]posting)
-	//	return results
-	for _, p := range merged {
-		if _, ok := grouped[p.docID]; !ok {
-			grouped[p.docID] = []posting{p}
-			continue
-		}
-		grouped[p.docID] = append(grouped[p.docID], p)
-	}
-
-	results := []QueryResult{}
-	for docID, postingList := range grouped {
-		r := QueryResult{
-			Object: i.documents[docID],
-		}
-
-		r.Score += len(postingList) ^ 2
-
-		if len(answers[docID]) > 0 {
-			matches := answers[docID]
-
-			sort.Slice(matches, func(i, j int) bool {
-				return matches[i].p1.position < matches[j].p1.position
-			})
-
-			fmt.Printf("matches: %#v\n", matches)
-
-			termIdx := 0
-			matchIdx := 0
-
-			curScore := 0
-			pendingHit := false
-
-			for termIdx < len(terms) && matchIdx < len(matches) {
-				fmt.Printf("loop term: %v match %v \n", termIdx, matchIdx)
-				distance := abs(matches[matchIdx].p2.position - matches[matchIdx].p1.position)
-
-				if matches[matchIdx].p1term == terms[termIdx] && distance == 1 {
-					pendingHit = true
-
-					termIdx++
-					fmt.Printf("loop term: %v match %v \n", termIdx, matchIdx)
-					if termIdx == len(terms) {
-						break
-					}
-				} else {
-					matchIdx++
-					continue
-				}
-
-				if matches[matchIdx].p2term == terms[termIdx] && pendingHit {
-					// phrase bigram hit
-					fmt.Printf("bigram hit: %v->%v \n", matches[matchIdx].p1term, matches[matchIdx].p2term)
-					curScore += 50 / distance
-
-					matchIdx++
-				} else {
-					termIdx++
-				}
-
-				pendingHit = false
-			}
-
-			r.Score += (curScore)
-			fmt.Printf("phraseScore: %v, rScore: %v\n", curScore, r.Score)
-			// r.Score = totalScore
-		}
-
-		results = append(results, r)
-	}
-
-	sort.Slice(results, func(i, j int) bool {
-		return results[i].Score > results[j].Score
+	// Sort them from least common word to most common
+	sort.Slice(lists, func(i, j int) bool {
+		return lists[i].termFreq < lists[j].termFreq
 	})
 
-	// return []QueryResult{}, nil
-	return results, nil
+	for _, pl := range lists {
+		fmt.Printf("found postingList(%v) tf(%v)\n", pl.term, pl.termFreq)
+	}
+
+	// perform a positional intersection of the postingLists
+	// we walk each posting list in order (by docID) and along the way
+	// note positional differences between our search terms
+	// this will produce a set of phrase matches that we can use later to sort results
+
+	return []QueryResult{}, nil
+	// return results, nil
 }

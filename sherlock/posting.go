@@ -8,9 +8,14 @@ package sherlock
 
 // postingList is the root structure for every term in the radix tree
 type postingList struct {
-	termID uint64
+	term     string
+	termFreq int
+	postings []posting
+}
 
-	postings []postings
+func (l *postingList) insert(posting posting) {
+	l.postings = append(l.postings, posting)
+	l.termFreq += len(posting.hits)
 }
 
 // posting represents all occurences of a term within a document
@@ -22,12 +27,28 @@ type posting struct {
 
 // hit represents an occurence of a term in a document
 type hit struct {
-	position uint16
-	fieldID  uint16
+	position int
+	fieldID  int
+}
+
+func intersectPostingLists(p1 postingList, p2 postingList) {
+
 }
 
 // merges posting lists
 // based on algorithm 2.12 from into to ir (manning)
+
+// // phrase proximity calculation
+// // (during positional intersection of posting lists)
+// // based on algorithm 2.12 from into to ir (manning)
+// const withinKWords = 1
+// type phraseMatch struct {
+// 	p1term string
+// 	p2term string
+// 	p1     hit
+// 	p2     hit
+// }
+// answers := make(map[uint64][]phraseMatch)
 
 // var p1, p2 *posting
 // if len(merged) > 1 {

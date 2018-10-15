@@ -9,7 +9,7 @@ import (
 type token struct {
 	value    string
 	position int
-	field    string
+	fieldID  int
 	weight   int
 }
 

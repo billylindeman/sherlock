@@ -32,16 +32,16 @@ func (s *Schema) analyze(v interface{}) (analysis, error) {
 	doc := reflect.ValueOf(v)
 	for _, f := range s.Fields {
 		// log.Println("analyzing field: ", f.fieldName)
-		text := doc.FieldByName(f.fieldName)
+		text := doc.Field(f.fieldID)
 		// fmt.Println("found value: ", text.String())
 		norm := normalize(text.String())
 		pos := 0
 		for i, word := range strings.Split(norm, " ") {
 			tok := token{
 				value:    strings.ToLower(word),
-				field:    f.fieldName,
+				fieldID:  f.fieldID,
 				position: i + 1,
-				weight:   f.weight,
+				// weight:   f.weight,
 			}
 			a.tokens = append(a.tokens, tok)
 			pos += len(word)
@@ -56,10 +56,9 @@ func (s *Schema) analyze(v interface{}) (analysis, error) {
 type FieldRule struct {
 	Omit bool
 
-	weight    int
-	field     reflect.StructField
-	tag       string
-	fieldName string
+	weight  int
+	fieldID int
+	tag     string
 }
 
 // NewSchemaFromStruct builds a document schema by reflecting over the passed in struct
@@ -77,8 +76,8 @@ func NewSchemaFromStruct(v interface{}) (*Schema, error) {
 		// }
 
 		r := FieldRule{
-			fieldName: f.Name,
-			tag:       tag,
+			fieldID: i,
+			tag:     tag,
 		}
 
 		// Skip if tag is not defined or ignored
