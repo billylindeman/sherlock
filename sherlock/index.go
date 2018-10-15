@@ -87,15 +87,17 @@ func (i *Index) Index(v interface{}) error {
 // Query takes a string and prefix searches it
 func (i *Index) Query(q string) ([]QueryResult, error) {
 	norm := normalize(q)
+	split := strings.Split(norm, " ")
 
 	termSearchers := []searcher{}
-	for _, t := range strings.Split(norm, " ") {
+	for _, t := range split {
 		trim := strings.TrimSpace(t)
-
-		searcher := &termSearcher{
-			term: trim,
+		if t != "\n" {
+			searcher := &termSearcher{
+				term: trim,
+			}
+			termSearchers = append(termSearchers, searcher)
 		}
-		termSearchers = append(termSearchers, searcher)
 	}
 
 	var plan searcher
