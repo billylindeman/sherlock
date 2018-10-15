@@ -98,16 +98,23 @@ func (i *Index) Query(q string) ([]QueryResult, error) {
 		termSearchers = append(termSearchers, searcher)
 	}
 
-	plan := intersectionSearcher{
+	var plan searcher
+
+	plan = &intersectionSearcher{
 		searcher: &unionSearcher{
 			searchers: termSearchers,
 		},
 	}
+	// plan = &unionSearcher{
+	// 	searchers: termSearchers,
+	// }
 
 	fmt.Printf("built query plan: ")
 	spew.Dump(plan)
 
 	matches := plan.search(i.inverted)
+	// fmt.Printf("found matches: ", matches)
+	// spew.Dump(matches)
 
 	for _, m := range matches {
 		if im, ok := m.(*intersectMatch); ok {

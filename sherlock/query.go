@@ -117,8 +117,9 @@ func (s *intersectionSearcher) search(i inverted) []match {
 
 	// if we only have 1 term hit we return the result as is
 	// (this operation basically becomes an identity op)
-	if len(matches) < 2 {
-		return matches
+	if len(matches) < 1 {
+		return []match{}
+		// return matches
 	}
 
 	intermediate := []intersectMatch{}
@@ -129,8 +130,10 @@ func (s *intersectionSearcher) search(i inverted) []match {
 		}
 		intermediate = append(intermediate, m)
 	}
+	fmt.Println("init ", matches[0].term())
 
 	for i := 1; i < len(matches); i++ {
+		fmt.Println("merging ", matches[i].term())
 		merging := matches[i].postings()
 		merged := s.matchIntersect(intermediate, merging)
 
@@ -147,7 +150,7 @@ func (s *intersectionSearcher) search(i inverted) []match {
 
 // matchIntersect performs a two pointer set intersection in O(len(p1)+len(p2)) time
 func (s intersectionSearcher) matchIntersect(curMatch []intersectMatch, p2 []posting) []intersectMatch {
-	matches := []intersectMatch{}
+	matches := make(map[uint64]intersectMatch)
 
 	p1 := []posting{}
 	for _, pp := range curMatch {
@@ -159,14 +162,18 @@ func (s intersectionSearcher) matchIntersect(curMatch []intersectMatch, p2 []pos
 
 	for p1idx < len(p1) && p2idx < len(p2) {
 		if p1[p1idx].docID == p2[p2idx].docID {
-			m := intersectMatch{
-				docID:       p1[p1idx].docID,
-				postingList: []posting{p1[p1idx], p2[p2idx]},
+			if im, ok := matches[p1[p1idx].docID]; !ok {
+				im.postingList = append(im.postingList, p2[p2idx])
+			} else {
+				matches[p1[p1idx].docID] = intersectMatch{
+					docID:       p1[p1idx].docID,
+					postingList: []posting{p1[p1idx], p2[p2idx]},
+				}
 			}
-			matches = append(matches, m)
+
 			p1idx++
 			p2idx++
-		} else if p1[p1idx].docID <= p2[p2idx].docID {
+		} else if p1[p1idx].docID < p2[p2idx].docID {
 			p1idx++
 		} else {
 			p2idx++
@@ -174,7 +181,12 @@ func (s intersectionSearcher) matchIntersect(curMatch []intersectMatch, p2 []pos
 
 	}
 
-	return matches
+	out := []intersectMatch{}
+	for _, m := range matches {
+		out = append(out, m)
+	}
+
+	return out
 }
 
 // first gen result sorting
