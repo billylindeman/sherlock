@@ -108,7 +108,15 @@ func (i *Index) Query(q string) ([]QueryResult, error) {
 	spew.Dump(plan)
 
 	matches := plan.search(i.inverted)
-	fmt.Println("found matches: ", matches)
+
+	for _, m := range matches {
+		if im, ok := m.(*intersectMatch); ok {
+			doc, _ := i.store.get(im.docID)
+			fmt.Printf("[%x](%v) -> %#v\n", im.docID, len(im.postings()), doc)
+		}
+	}
+
+	// fmt.Println("found matches: ", matches)
 
 	// Grab posting lists from the inverted index
 	// lists := []*postingList{}

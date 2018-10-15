@@ -92,7 +92,24 @@ type intersectionSearcher struct {
 type intersectMatch struct {
 	docID uint64
 
-	postings []posting
+	postingList []posting
+}
+
+func (m intersectMatch) termCount() int {
+	// return m.p.termFreq
+	return -1
+}
+
+func (m intersectMatch) term() string {
+	return ""
+}
+
+func (m intersectMatch) postings() []posting {
+	return m.postingList
+}
+
+func (m intersectMatch) String() string {
+	return fmt.Sprintf("%v(%v)", m.term(), m.termCount())
 }
 
 func (s *intersectionSearcher) search(i inverted) []match {
@@ -104,22 +121,38 @@ func (s *intersectionSearcher) search(i inverted) []match {
 		return matches
 	}
 
-	out := []match{}
+	intermediate := []intersectMatch{}
+	for _, p := range matches[0].postings() {
+		m := intersectMatch{
+			docID:       p.docID,
+			postingList: []posting{p},
+		}
+		intermediate = append(intermediate, m)
+	}
 
-	intermediate := matches[0]
 	for i := 1; i < len(matches); i++ {
 		merging := matches[i].postings()
-		merged := s.matchIntersect(intermediate.postings(), merging)
+		merged := s.matchIntersect(intermediate, merging)
 
 		fmt.Println("merged: ", len(merged))
 		intermediate = merged
+	}
+
+	out := []match{}
+	for _, m := range intermediate {
+		out = append(out, &m)
 	}
 	return out
 }
 
 // matchIntersect performs a two pointer set intersection in O(len(p1)+len(p2)) time
-func (s intersectionSearcher) matchIntersect(p1 []posting, p2 []posting) []intersectMatch {
+func (s intersectionSearcher) matchIntersect(curMatch []intersectMatch, p2 []posting) []intersectMatch {
 	matches := []intersectMatch{}
+
+	p1 := []posting{}
+	for _, pp := range curMatch {
+		p1 = append(p1, pp.postingList...)
+	}
 
 	p1idx := 0
 	p2idx := 0
@@ -127,8 +160,8 @@ func (s intersectionSearcher) matchIntersect(p1 []posting, p2 []posting) []inter
 	for p1idx < len(p1) && p2idx < len(p2) {
 		if p1[p1idx].docID == p2[p2idx].docID {
 			m := intersectMatch{
-				docID:    p1[p1idx].docID,
-				postings: []posting{p1[p1idx], p2[p2idx]},
+				docID:       p1[p1idx].docID,
+				postingList: []posting{p1[p1idx], p2[p2idx]},
 			}
 			matches = append(matches, m)
 			p1idx++
