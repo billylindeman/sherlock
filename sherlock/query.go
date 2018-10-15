@@ -7,13 +7,141 @@
 //
 package sherlock
 
-type termMatch struct {
-	term     string
-	position int
+import (
+	"fmt"
+	"sort"
+)
+
+// the query pipeline should look something like this
+//   query, load, search, score, collect -> matches
+
+type match interface {
+	term() string
+	termCount() int
+
+	postings() []posting
 }
 
-type queryResult struct {
-	termMatches termMatch
+type result interface {
+	docID() int
+}
+
+type searcher interface {
+	search(index inverted) []match
+}
+
+// termSearcher loads the postingList for a single term
+type termSearcher struct {
+	term string
+}
+
+func (t *termSearcher) search(i inverted) []match {
+	if val, err := i.get(t.term); err == nil {
+		return []match{
+			termMatch{
+				p: val,
+			},
+		}
+	}
+	return []match{}
+}
+
+// termMatch represents a postingList hit in the inverted index (when executed by a termSearcher)
+type termMatch struct {
+	p *postingList
+}
+
+func (m termMatch) termCount() int {
+	return m.p.termFreq
+}
+
+func (m termMatch) term() string {
+	return m.p.term
+}
+
+func (m termMatch) postings() []posting {
+	return m.p.postings
+}
+
+func (m termMatch) String() string {
+	return fmt.Sprintf("%v(%v)", m.term(), m.termCount())
+}
+
+// unionSearcher collects the results from child searchers and merges them
+type unionSearcher struct {
+	searchers []searcher
+}
+
+func (u *unionSearcher) search(i inverted) []match {
+	matches := []match{}
+	for _, s := range u.searchers {
+		matches = append(matches, s.search(i)...)
+	}
+
+	sort.Slice(matches, func(i, j int) bool {
+		return matches[i].termCount() < matches[j].termCount()
+	})
+	return matches
+}
+
+// intersectionSearcher performs an intersection on the child termSearchers (and)
+type intersectionSearcher struct {
+	searcher searcher
+}
+
+type intersectMatch struct {
+	docID uint64
+
+	postings []posting
+}
+
+func (s *intersectionSearcher) search(i inverted) []match {
+	matches := s.searcher.search(i)
+
+	// if we only have 1 term hit we return the result as is
+	// (this operation basically becomes an identity op)
+	if len(matches) < 2 {
+		return matches
+	}
+
+	out := []match{}
+
+	intermediate := matches[0]
+	for i := 1; i < len(matches); i++ {
+		merging := matches[i].postings()
+		merged := s.matchIntersect(intermediate.postings(), merging)
+
+		fmt.Println("merged: ", len(merged))
+		intermediate = merged
+	}
+	return out
+}
+
+// matchIntersect performs a two pointer set intersection in O(len(p1)+len(p2)) time
+func (s intersectionSearcher) matchIntersect(p1 []posting, p2 []posting) []intersectMatch {
+	matches := []intersectMatch{}
+
+	p1idx := 0
+	p2idx := 0
+
+	for p1idx < len(p1) && p2idx < len(p2) {
+		if p1[p1idx].docID == p2[p2idx].docID {
+			m := intersectMatch{
+				docID:    p1[p1idx].docID,
+				postings: []posting{p1[p1idx], p2[p2idx]},
+			}
+			matches = append(matches, m)
+			p1idx++
+			p2idx++
+		} else if p1[p1idx].docID <= p2[p2idx].docID {
+			p1idx++
+		} else {
+			p2idx++
+		}
+
+	}
+
+	return matches
 }
 
 // first gen result sorting

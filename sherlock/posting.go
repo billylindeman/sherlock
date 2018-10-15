@@ -31,10 +31,6 @@ type hit struct {
 	fieldID  int
 }
 
-func intersectPostingLists(p1 postingList, p2 postingList) {
-
-}
-
 // merges posting lists
 // based on algorithm 2.12 from into to ir (manning)
 

@@ -8,8 +8,9 @@ package sherlock
 
 import (
 	"fmt"
-	"sort"
 	"strings"
+
+	"github.com/davecgh/go-spew/spew"
 )
 
 // Index search backed by a prefix map
@@ -86,28 +87,40 @@ func (i *Index) Index(v interface{}) error {
 // Query takes a string and prefix searches it
 func (i *Index) Query(q string) ([]QueryResult, error) {
 	norm := normalize(q)
-	terms := []string{}
+
+	termSearchers := []searcher{}
 	for _, t := range strings.Split(norm, " ") {
-		terms = append(terms, strings.TrimSpace(t))
+		trim := strings.TrimSpace(t)
+
+		searcher := &termSearcher{
+			term: trim,
+		}
+		termSearchers = append(termSearchers, searcher)
 	}
 
-	fmt.Printf("Got query terms: %v\n", terms)
+	plan := intersectionSearcher{
+		searcher: &unionSearcher{
+			searchers: termSearchers,
+		},
+	}
+
+	fmt.Printf("built query plan: ")
+	spew.Dump(plan)
+
+	matches := plan.search(i.inverted)
+	fmt.Println("found matches: ", matches)
 
 	// Grab posting lists from the inverted index
-	lists := []*postingList{}
-	for _, term := range terms {
-		val, _ := i.inverted.get(term)
-		lists = append(lists, val)
-	}
+	// lists := []*postingList{}
+	// for _, term := range terms {
+	// 	val, _ := i.inverted.get(term)
+	// 	lists = append(lists, val)
+	// }
 
-	// Sort them from least common word to most common
-	sort.Slice(lists, func(i, j int) bool {
-		return lists[i].termFreq < lists[j].termFreq
-	})
-
-	for _, pl := range lists {
-		fmt.Printf("found postingList(%v) tf(%v)\n", pl.term, pl.termFreq)
-	}
+	// // Sort them from least common word to most common
+	// sort.Slice(lists, func(i, j int) bool {
+	// 	return lists[i].termFreq < lists[j].termFreq
+	// })
 
 	// perform a positional intersection of the postingLists
 	// we walk each posting list in order (by docID) and along the way
