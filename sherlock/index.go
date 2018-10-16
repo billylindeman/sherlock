@@ -86,9 +86,14 @@ func (i *Index) Index(v interface{}) error {
 
 // Query takes a string and prefix searches it
 func (i *Index) Query(q string) ([]QueryResult, error) {
+
+	// parse the query string
+	// for now we just split into token
 	norm := normalize(q)
 	split := strings.Split(norm, " ")
 
+	// for each term, we build a termSearcher
+	// the termsSearcher will grab the posting lists for a term
 	termSearchers := []searcher{}
 	for _, t := range split {
 		trim := strings.TrimSpace(t)
@@ -100,35 +105,25 @@ func (i *Index) Query(q string) ([]QueryResult, error) {
 		}
 	}
 
-	var plan searcher
-
-	plan = &intersectionSearcher{
+	plan := &intersectionSearcher{
 		searcher: &unionSearcher{
 			searchers: termSearchers,
 		},
 	}
-	// plan = &unionSearcher{
-	// 	searchers: termSearchers,
-	// }
 
 	fmt.Printf("built query plan: ")
 	spew.Dump(plan)
-
 	matches := plan.search(i.inverted)
-	// fmt.Printf("found matches: ", matches)
-	// spew.Dump(matches)
 
 	results := []QueryResult{}
 	for _, m := range matches {
 		if im, ok := m.(*intersectMatch); ok {
 			doc, _ := i.store.get(im.docID)
-			// fmt.Printf("[%x](%v) -> %#v\n", im.docID, len(im.postings()), doc)
 
 			qr := QueryResult{
 				Object: doc,
 				docID:  im.docID,
 			}
-
 			results = append(results, qr)
 		}
 	}
