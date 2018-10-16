@@ -118,10 +118,18 @@ func (i *Index) Query(q string) ([]QueryResult, error) {
 	// fmt.Printf("found matches: ", matches)
 	// spew.Dump(matches)
 
+	results := []QueryResult{}
 	for _, m := range matches {
 		if im, ok := m.(*intersectMatch); ok {
 			doc, _ := i.store.get(im.docID)
-			fmt.Printf("[%x](%v) -> %#v\n", im.docID, len(im.postings()), doc)
+			// fmt.Printf("[%x](%v) -> %#v\n", im.docID, len(im.postings()), doc)
+
+			qr := QueryResult{
+				Object: doc,
+				docID:  im.docID,
+			}
+
+			results = append(results, qr)
 		}
 	}
 
@@ -144,6 +152,6 @@ func (i *Index) Query(q string) ([]QueryResult, error) {
 	// note positional differences between our search terms
 	// this will produce a set of phrase matches that we can use later to sort results
 
-	return []QueryResult{}, nil
-	// return results, nil
+	// return []QueryResult{}, nil
+	return results, nil
 }
