@@ -112,10 +112,15 @@ func (m intersectMatch) String() string {
 	return fmt.Sprintf("%v(%v)", m.docID, len(m.postingList))
 }
 
+// todo
+// now that we're using maps to track uniqueness we're losing our sort order and that fucks up the intersection
+// we need another type (maybe intersectContext) that can cache intersect results and handle the incremental additions during the merge
+// optimal solution would likely be using a priority queue to hold intersectMatches by doc id
+
 func (s *intersectionSearcher) search(i inverted) []match {
 	matches := s.searcher.search(i)
 
-	fmt.Println("parsing matches: ", matches)
+	fmt.Println("[intersectionSearcher] processing termMatches: ", matches)
 	// if we only have 1 term hit we return the result as is
 	// (this operation basically becomes an identity op)
 	if len(matches) < 1 {
@@ -123,21 +128,22 @@ func (s *intersectionSearcher) search(i inverted) []match {
 		// return matches
 	}
 
-	intermediate := map[uint64]*intersectMatch{}
+	intermediate := []*intersectMatch{}
 	for _, p := range matches[0].postings() {
-		intermediate[p.docID] = &intersectMatch{
+		m := &intersectMatch{
 			docID:       p.docID,
 			postingList: []posting{p},
 		}
+		intermediate = append(intermediate, m)
 	}
-	fmt.Println("init ", matches[0].term())
+	// fmt.Println("init ", matches[0].term())
 
 	for i := 1; i < len(matches); i++ {
-		fmt.Println("merging ", matches[i].term())
+		// fmt.Println("merging ", matches[i].term())
 		merging := matches[i].postings()
 		merged := s.matchIntersect(intermediate, merging)
 
-		fmt.Printf("merged: %v %#v\n", len(merged), merged)
+		// fmt.Printf("merged: %v %#v\n", len(merged), merged)
 		intermediate = merged
 	}
 
@@ -149,8 +155,8 @@ func (s *intersectionSearcher) search(i inverted) []match {
 }
 
 // matchIntersect performs a two postingList set intersection in O(len(p1)+len(p2)) time
-func (s intersectionSearcher) matchIntersect(curMatch map[uint64]*intersectMatch, p2 []posting) map[uint64]*intersectMatch {
-	matches := make(map[uint64]*intersectMatch)
+func (s intersectionSearcher) matchIntersect(curMatch []*intersectMatch, p2 []posting) []*intersectMatch {
+	matches := []*intersectMatch{}
 
 	p1 := []posting{}
 	for _, pp := range curMatch {
@@ -162,14 +168,11 @@ func (s intersectionSearcher) matchIntersect(curMatch map[uint64]*intersectMatch
 
 	for p1idx < len(p1) && p2idx < len(p2) {
 		if p1[p1idx].docID == p2[p2idx].docID {
-			if im, ok := matches[p1[p1idx].docID]; ok {
-				im.postingList = append(im.postingList, p2[p2idx])
-			} else {
-				matches[p1[p1idx].docID] = &intersectMatch{
-					docID:       p1[p1idx].docID,
-					postingList: []posting{p1[p1idx], p2[p2idx]},
-				}
+			m := &intersectMatch{
+				docID:       p1[p1idx].docID,
+				postingList: []posting{p1[p1idx], p2[p2idx]},
 			}
+			matches = append(matches, m)
 
 			p1idx++
 			p2idx++
