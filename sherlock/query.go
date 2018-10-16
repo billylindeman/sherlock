@@ -125,9 +125,9 @@ func (s *intersectionSearcher) search(i inverted) []match {
 	// (this operation basically becomes an identity op)
 	if len(matches) < 1 {
 		return []match{}
-		// return matches
 	}
 
+	// seed the intersectionMatch with the first term
 	intermediate := []*intersectMatch{}
 	for _, p := range matches[0].postings() {
 		m := &intersectMatch{
@@ -136,17 +136,15 @@ func (s *intersectionSearcher) search(i inverted) []match {
 		}
 		intermediate = append(intermediate, m)
 	}
-	// fmt.Println("init ", matches[0].term())
 
+	// loop through the remaining terms and intersect it with the intermediary result
 	for i := 1; i < len(matches); i++ {
-		// fmt.Println("merging ", matches[i].term())
 		merging := matches[i].postings()
 		merged := s.matchIntersect(intermediate, merging)
-
-		// fmt.Printf("merged: %v %#v\n", len(merged), merged)
 		intermediate = merged
 	}
 
+	// cast back to match{}
 	out := []match{}
 	for _, m := range intermediate {
 		out = append(out, m)
