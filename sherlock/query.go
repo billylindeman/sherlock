@@ -22,10 +22,6 @@ type match interface {
 	postings() []posting
 }
 
-type result interface {
-	docID() int
-}
-
 type searcher interface {
 	search(index inverted) []match
 }
@@ -113,10 +109,6 @@ func (m intersectMatch) String() string {
 }
 
 // todo
-// now that we're using maps to track uniqueness we're losing our sort order and that fucks up the intersection
-// we need another type (maybe intersectContext) that can cache intersect results and handle the incremental additions during the merge
-// optimal solution would likely be using a priority queue to hold intersectMatches by doc id
-
 func (s *intersectionSearcher) search(i inverted) []match {
 	matches := s.searcher.search(i)
 

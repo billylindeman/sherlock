@@ -21,7 +21,7 @@ type store interface {
 	get(uint64) (interface{}, error)
 }
 
-// memoryStore is an inmemory DocStore backed by a basic map
+// memoryStore is an inmemory store backed by a basic map
 type memoryStore struct {
 	documents map[uint64]interface{}
 }

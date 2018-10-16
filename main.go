@@ -18,21 +18,6 @@ type Document struct {
 	Line string `json:"line_number"`
 }
 
-var corpus = []Document{
-	Document{
-		Body: "hello there son",
-	},
-	Document{
-		Body: "different entirely",
-	},
-	Document{
-		Body: "super different entirely",
-	},
-	Document{
-		Body: "it aint be like it is, but it do",
-	},
-}
-
 func main() {
 	s := sherlock.Index{}
 
