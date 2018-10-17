@@ -42,6 +42,22 @@ func (t *termSearcher) search(i inverted) []match {
 	return []match{}
 }
 
+// prefixSearcher loads the posting lists for any terms that match the prefix
+type prefixSearcher struct {
+	prefix string
+}
+
+func (p *prefixSearcher) search(i inverted) []match {
+	matches := []match{}
+
+	if val, err := i.getByPrefix(p.prefix); err == nil {
+		for _, pl := range val {
+			matches = append(matches, termMatch{p: val})
+		}
+	}
+	return []match{}
+}
+
 // termMatch represents a postingList hit in the inverted index (when executed by a termSearcher)
 type termMatch struct {
 	p *postingList

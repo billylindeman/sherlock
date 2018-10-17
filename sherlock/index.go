@@ -95,12 +95,17 @@ func (i *Index) Query(q string) ([]QueryResult, error) {
 	// for each term, we build a termSearcher
 	// the termsSearcher will grab the posting lists for a term
 	termSearchers := []searcher{}
-	for _, t := range split {
+	for i, t := range split {
 		trim := strings.TrimSpace(t)
 		if t != "\n" {
-			searcher := &termSearcher{
-				term: trim,
+			var s searcher
+
+			if i == len(split)-1 {
+				searcher = &prefixSearcher{prefix: trim}
+			} else {
+				searcher = &termSearcher{term: trim}
 			}
+
 			termSearchers = append(termSearchers, searcher)
 		}
 	}
