@@ -32,6 +32,8 @@ type termSearcher struct {
 }
 
 func (t *termSearcher) search(i inverted) []match {
+	fmt.Println("[termSearcher] retrieving ", t.term)
+
 	if val, err := i.get(t.term); err == nil {
 		return []match{
 			termMatch{
@@ -50,12 +52,14 @@ type prefixSearcher struct {
 func (p *prefixSearcher) search(i inverted) []match {
 	matches := []match{}
 
+	fmt.Println("[prefixSearcher] retrieving prefix: ", p.prefix)
 	if val, err := i.getByPrefix(p.prefix); err == nil {
 		for _, pl := range val {
-			matches = append(matches, termMatch{p: val})
+			matches = append(matches, termMatch{p: pl})
 		}
 	}
-	return []match{}
+	fmt.Printf("prefixSearcher] found %v terms\n", len(matches))
+	return matches
 }
 
 // termMatch represents a postingList hit in the inverted index (when executed by a termSearcher)
@@ -85,9 +89,12 @@ type unionSearcher struct {
 }
 
 func (u *unionSearcher) search(i inverted) []match {
+	fmt.Println("[unionSearcher] running")
 	matches := []match{}
 	for _, s := range u.searchers {
-		matches = append(matches, s.search(i)...)
+		if s != nil {
+			matches = append(matches, s.search(i)...)
+		}
 	}
 
 	sort.Slice(matches, func(i, j int) bool {
@@ -126,6 +133,8 @@ func (m intersectMatch) String() string {
 
 // todo
 func (s *intersectionSearcher) search(i inverted) []match {
+
+	fmt.Println("[intersectionSearcher] running")
 	matches := s.searcher.search(i)
 
 	fmt.Println("[intersectionSearcher] processing termMatches: ", matches)
@@ -193,65 +202,92 @@ func (s intersectionSearcher) matchIntersect(curMatch []*intersectMatch, p2 []po
 	return matches
 }
 
-// first gen result sorting
-//
-// results := []QueryResult{}
-// for docID, postingList := range grouped {
-// 	r := QueryResult{
-// 		Object: i.documents[docID],
-// 	}
+// merges posting lists
+// based on algorithm 2.12 from into to ir (manning)
 
-// 	r.Score += len(postingList) ^ 2
+// // phrase proximity calculation
+// // (during positional intersection of posting lists)
+// // based on algorithm 2.12 from into to ir (manning)
+// const withinKWords = 1
+// type phraseMatch struct {
+// 	p1term string
+// 	p2term string
+// 	p1     hit
+// 	p2     hit
+// }
+// answers := make(map[uint64][]phraseMatch)
 
-// 	if len(answers[docID]) > 0 {
-// 		matches := answers[docID]
+// var p1, p2 *posting
+// if len(merged) > 1 {
+// 	p1 = &merged[0]
+// 	p2 = &merged[1]
+// 	idx := 1
 
-// 		sort.Slice(matches, func(i, j int) bool {
-// 			return matches[i].p1.position < matches[j].p1.position
-// 		})
+// 	for p1 != nil && p2 != nil {
+// 		// terms in the same document
+// 		if p1.docID == p2.docID {
+// 			fmt.Printf("p1: %#v -- p2: %#v\n", p1.term, p2.term)
 
-// 		fmt.Printf("matches: %#v\n", matches)
-
-// 		termIdx := 0
-// 		matchIdx := 0
-
-// 		curScore := 0
-// 		pendingHit := false
-
-// 		for termIdx < len(terms) && matchIdx < len(matches) {
-// 			fmt.Printf("loop term: %v match %v \n", termIdx, matchIdx)
-// 			distance := abs(matches[matchIdx].p2.position - matches[matchIdx].p1.position)
-
-// 			if matches[matchIdx].p1term == terms[termIdx] && distance == 1 {
-// 				pendingHit = true
-
-// 				termIdx++
-// 				fmt.Printf("loop term: %v match %v \n", termIdx, matchIdx)
-// 				if termIdx == len(terms) {
-// 					break
+// 			l := []hit{}
+// 			for _, pp1 := range p1.positions {
+// 				fmt.Printf("pp1: %#v\n", pp1)
+// 				for _, pp2 := range p2.positions {
+// 					if abs(pp1.position-pp2.position) <= withinKWords {
+// 						l = append(l, pp2)
+// 					} else if pp2.position > pp1.position {
+// 						break
+// 					}
 // 				}
+
+// 				for len(l) > 0 && abs(l[0].position-pp1.position) > withinKWords {
+// 					fmt.Println("purgging step?")
+// 					l = append(l[:0], l[1:]...) // remove item 0 from slice
+// 				}
+
+// 				// fmt.Println(l)
+// 				for _, h := range l {
+// 					// make sure match object is in order (makes phrase evalution easier)
+// 					if pp1.position < h.position {
+// 						m := phraseMatch{
+// 							p1term: p1.term,
+// 							p2term: p2.term,
+// 							p1:     pp1,
+// 							p2:     h,
+// 						}
+// 						answers[p1.docID] = append(answers[p1.docID], m)
+// 					} else {
+// 						m := phraseMatch{
+// 							p1term: p2.term,
+// 							p2term: p1.term,
+// 							p1:     h,
+// 							p2:     pp1,
+// 						}
+// 						answers[p1.docID] = append(answers[p1.docID], m)
+
+// 					}
+// 				}
+// 			}
+
+// 			idx++
+// 			if idx < len(merged) {
+// 				p1 = p2
+// 				p2 = &merged[idx]
+// 				continue
 // 			} else {
-// 				matchIdx++
+// 				break
+// 			}
+// 		} else if p1.docID < p2.docID {
+// 			idx++
+// 			p1 = nil
+// 			if idx < len(merged) {
+// 				p1 = &merged[idx]
 // 				continue
 // 			}
-
-// 			if matches[matchIdx].p2term == terms[termIdx] && pendingHit {
-// 				// phrase bigram hit
-// 				fmt.Printf("bigram hit: %v->%v \n", matches[matchIdx].p1term, matches[matchIdx].p2term)
-// 				curScore += 50 / distance
-
-// 				matchIdx++
-// 			} else {
-// 				termIdx++
+// 		} else {
+// 			idx++
+// 			p2 = nil
+// 			if idx < len(merged) {
+// 				p2 = &merged[idx]
 // 			}
-
-// 			pendingHit = false
 // 		}
-
-// 		r.Score += (curScore)
-// 		fmt.Printf("phraseScore: %v, rScore: %v\n", curScore, r.Score)
-// 		// r.Score = totalScore
 // 	}
-
-// 	results = append(results, r)
-// }

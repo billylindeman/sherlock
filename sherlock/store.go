@@ -9,7 +9,9 @@
 
 package sherlock
 
-import "errors"
+import (
+	"errors"
+)
 
 var (
 	errDocumentNotFound = errors.New("document not found in store")
@@ -46,3 +48,22 @@ func (s *memoryStore) get(docID uint64) (interface{}, error) {
 	}
 	return nil, errDocumentNotFound
 }
+
+// type badgerStore struct {
+// 	db badger.DB
+// }
+
+// func NewBadgerStore(db *badger.DB) store {
+// 	return &badgerStore{
+// 		db: db,
+// 	}
+// }
+// func (b *badgerStore) insert(docID uint64, v interface{}) error {
+// 	b.db.Update(func(txn *badger.Txn) error {
+// 		txn.Set([]byte(docID), nil)
+
+// 	})
+// }
+
+// func (b *badgerStore) get(docID uint64) (interface{}, error) {
+// }

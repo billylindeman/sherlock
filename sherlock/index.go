@@ -95,24 +95,39 @@ func (i *Index) Query(q string) ([]QueryResult, error) {
 	// for each term, we build a termSearcher
 	// the termsSearcher will grab the posting lists for a term
 	termSearchers := []searcher{}
+	var prefix searcher
 	for i, t := range split {
+
 		trim := strings.TrimSpace(t)
 		if t != "\n" {
 			var s searcher
 
 			if i == len(split)-1 {
-				searcher = &prefixSearcher{prefix: trim}
+				prefix = &prefixSearcher{prefix: trim}
 			} else {
-				searcher = &termSearcher{term: trim}
+				s = &termSearcher{term: trim}
+				termSearchers = append(termSearchers, s)
 			}
 
-			termSearchers = append(termSearchers, searcher)
 		}
 	}
 
-	plan := &intersectionSearcher{
-		searcher: &unionSearcher{
-			searchers: termSearchers,
+	// plan := &intersectionSearcher{
+	// 	searcher: &unionSearcher{
+	// 		searchers: termSearchers,
+	// 	},
+	// }
+
+	// for prefix search we need to union / intersect all the terms before
+	// merging with the prefix results
+	plan := &unionSearcher{
+		searchers: []searcher{
+			&intersectionSearcher{
+				searcher: &unionSearcher{
+					searchers: termSearchers,
+				},
+			},
+			prefix,
 		},
 	}
 

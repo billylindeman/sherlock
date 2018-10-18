@@ -8,6 +8,8 @@ package sherlock
 
 import (
 	"errors"
+	"fmt"
+	"log"
 	"reflect"
 	"strings"
 )
@@ -71,9 +73,16 @@ func NewSchemaFromStruct(v interface{}) (*Schema, error) {
 		f := s.Type().Field(i)
 		tag := f.Tag.Get(tagName)
 
-		// for _, t := range strings.Split(tag, ",") {
-		// 	// log.Println("Found option: ", t)
-		// }
+		for _, t := range strings.Split(tag, ",") {
+			if strings.Contains(tag, "=") {
+				// parse out variable
+				terms := strings.Split(t, "=")
+				fmt.Printf("[schema] variable %v=(%v)\n", terms[0], terms[1])
+			} else {
+				log.Println("[scheam] flag: ", t)
+			}
+
+		}
 
 		r := FieldRule{
 			fieldID: i,

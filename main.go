@@ -13,9 +13,9 @@ import (
 )
 
 type Document struct {
-	// Title string `json:"play_name" sherlock:"weight=10"`
-	Body string `json:"text_entry" sherlock:"weight=5"`
-	Line string `json:"line_number"`
+	Title string `json:"play_name" sherlock:"weight=10"`
+	Body  string `json:"text_entry" sherlock:"weight=5"`
+	Line  string `json:"line_number"`
 }
 
 func main() {
